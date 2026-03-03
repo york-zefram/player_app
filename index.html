@@ -362,9 +362,15 @@
 
     folderInput.onchange = (e) => {
         const files = Array.from(e.target.files);
-        allFiles = files.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.mp3') || f.name.endsWith('.m4a') || f.name.endsWith('.wav')).map(f => ({
-            name: f.name, path: f.webkitRelativePath.split('/'), file: f
-        }));
+        allFiles = files.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.mp3') || f.name.endsWith('.m4a') || f.name.endsWith('.wav')).map(f => {
+            // パスから空の要素を除去し、純粋な階層構造を維持
+            const pathParts = f.webkitRelativePath.split('/').filter(p => p !== "");
+            return {
+                name: f.name, 
+                path: pathParts, 
+                file: f
+            };
+        });
         currentPath = [];
         renderList();
         overlay.style.display = 'flex';
@@ -373,31 +379,67 @@
     function renderList() {
         trackList.innerHTML = '';
         document.getElementById('breadcrumb').innerText = "ROOT / " + currentPath.join(' / ').toUpperCase();
+        
         if (currentPath.length > 0) {
-            const up = document.createElement('li'); up.className = 'item folder'; up.innerText = `.. (BACK)`;
-            up.onclick = () => { currentPath.pop(); renderList(); }; trackList.appendChild(up);
+            const up = document.createElement('li'); 
+            up.className = 'item folder'; 
+            up.innerText = `.. (BACK)`;
+            up.onclick = () => { currentPath.pop(); renderList(); }; 
+            trackList.appendChild(up);
         }
-        const dirs = new Set(); const files = [];
+
+        const dirs = new Set(); 
+        const files = [];
+
         allFiles.forEach(f => {
+            // 現在表示している階層(currentPath)と一致するかチェック
             const isMatch = currentPath.every((p, i) => f.path[i] === p);
             if (isMatch) {
-                const next = f.path[currentPath.length];
-                if (f.path.length === currentPath.length + 1) files.push(f); else if (next) dirs.add(next);
+                const nextPart = f.path[currentPath.length];
+                if (f.path.length === currentPath.length + 1) {
+                    // 現在の階層にあるファイル
+                    files.push(f);
+                } else if (nextPart) {
+                    // 現在の階層の下にあるフォルダ
+                    dirs.add(nextPart);
+                }
             }
         });
-        dirs.forEach(d => {
-            const li = document.createElement('li'); li.className = 'item folder'; li.innerText = d.toUpperCase();
-            li.onclick = () => { currentPath.push(d); renderList(); }; trackList.appendChild(li);
+
+        // フォルダを表示
+        Array.from(dirs).sort().forEach(d => {
+            const li = document.createElement('li'); 
+            li.className = 'item folder'; 
+            li.innerText = d.toUpperCase();
+            li.onclick = () => { currentPath.push(d); renderList(); }; 
+            trackList.appendChild(li);
         });
+
+        // ファイルを表示
         files.forEach(f => {
-            const li = document.createElement('li'); li.className = 'item track';
+            const li = document.createElement('li'); 
+            li.className = 'item track';
             const uniqueId = `info-${f.file.lastModified}-${f.file.size}`;
             li.innerHTML = `<div class="item-upper"><span class="track-name-part">${f.name}</span><span class="track-duration-part" id="dur-${uniqueId}">--:--</span></div><div class="item-lower" id="meta-${uniqueId}">UNKNOWN ARTIST</div>`;
             li.onclick = () => { loadTrack(f.file); overlay.style.display = 'none'; };
             trackList.appendChild(li);
-            const url = URL.createObjectURL(f.file); const tempAudio = new Audio(url);
-            tempAudio.onloadedmetadata = () => { const el = document.getElementById(`dur-${uniqueId}`); if (el) el.innerText = formatTime(tempAudio.duration); URL.revokeObjectURL(url); };
-            if (window.jsmediatags) { window.jsmediatags.read(f.file, { onSuccess: (tag) => { const artist = (tag.tags.artist || "UNKNOWN ARTIST").toUpperCase(); const metaEl = document.getElementById(`meta-${uniqueId}`); if (metaEl) metaEl.innerText = artist; } }); }
+            
+            const url = URL.createObjectURL(f.file); 
+            const tempAudio = new Audio(url);
+            tempAudio.onloadedmetadata = () => { 
+                const el = document.getElementById(`dur-${uniqueId}`); 
+                if (el) el.innerText = formatTime(tempAudio.duration); 
+                URL.revokeObjectURL(url); 
+            };
+            if (window.jsmediatags) { 
+                window.jsmediatags.read(f.file, { 
+                    onSuccess: (tag) => { 
+                        const artist = (tag.tags.artist || "UNKNOWN ARTIST").toUpperCase(); 
+                        const metaEl = document.getElementById(`meta-${uniqueId}`); 
+                        if (metaEl) metaEl.innerText = artist; 
+                    } 
+                }); 
+            }
         });
     }
 
@@ -424,7 +466,6 @@
         updateTempo(100);
     }
 
-    // --- PLAYER FUNCTIONS (from index3.html original) ---
     function startSequence() { loadingOverlay.style.display = 'none'; audio.play(); playIcon.innerHTML = ICON_PAUSE; }
     tapToStart.onclick = (e) => { e.stopPropagation(); startSequence(); };
 
