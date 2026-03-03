@@ -250,8 +250,8 @@
         .breadcrumb { font-size: 0.5rem; color: var(--neon-blue); margin: 6px 0; border-bottom: 1px solid #333; padding-bottom: 4px; font-family: var(--font-header); text-transform: uppercase; }
         #track-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; border-top: 1px solid #222; }
         .item { border-bottom: 1px solid #222; display: flex; text-align: left; box-sizing: border-box; margin: 0 !important; }
-        .item.folder { color: var(--neon-blue); font-weight: bold; font-size: 0.75rem; align-items: center; height: 34px; line-height: 34px; padding: 0 10px; cursor: pointer; }
-        .item.track { padding: 4px 10px; flex-direction: column; justify-content: center; min-height: 34px; cursor: pointer; }
+        .item.folder { color: var(--neon-blue); font-weight: bold; font-size: 0.75rem; align-items: center; height: 34px; line-height: 34px; padding: 0; }
+        .item.track { padding: 4px 0; flex-direction: column; justify-content: center; min-height: 34px; }
         .item-upper { display: flex; align-items: center; justify-content: space-between; width: 100%; }
         .item-lower { display: block !important; color: #888; font-size: 0.55rem; margin-top: 0px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .track-name-part { flex: 1; font-size: 0.7rem; color: #fff; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -350,26 +350,21 @@
     let posA = 0; let posB = 100;
     let isDragging = false;
 
-    // --- PLAYLIST CORE (フォルダ階層対応版) ---
+    // --- PLAYLIST CORE ---
     const overlay = document.getElementById('playlist-overlay');
     const folderInput = document.getElementById('folder-input');
     const trackList = document.getElementById('track-list');
     let allFiles = [];
     let currentPath = [];
 
-    document.getElementById('btn-select-file').onclick = () => { 
-        if (allFiles.length === 0) { alert("SCAN FOLDER FIRST"); return; } 
-        overlay.style.display = 'flex'; 
-    };
+    document.getElementById('btn-select-file').onclick = () => { if (allFiles.length === 0) { alert("SCAN FOLDER FIRST"); return; } overlay.style.display = 'flex'; };
     document.getElementById('btn-close-list').onclick = () => overlay.style.display = 'none';
 
     folderInput.onchange = (e) => {
         const files = Array.from(e.target.files);
-        allFiles = files.filter(f => f.type.startsWith('audio/') || /\.(mp3|m4a|wav)$/i.test(f.name)).map(f => {
-            const parts = f.webkitRelativePath.split('/');
-            parts.shift(); // 先頭のルートディレクトリ名を削除
-            return { name: f.name, path: parts, file: f };
-        });
+        allFiles = files.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.mp3') || f.name.endsWith('.m4a') || f.name.endsWith('.wav')).map(f => ({
+            name: f.name, path: f.webkitRelativePath.split('/'), file: f
+        }));
         currentPath = [];
         renderList();
         overlay.style.display = 'flex';
@@ -378,100 +373,48 @@
     function renderList() {
         trackList.innerHTML = '';
         document.getElementById('breadcrumb').innerText = "ROOT / " + currentPath.join(' / ').toUpperCase();
-        
-        // 戻るボタン
         if (currentPath.length > 0) {
-            const up = document.createElement('li'); 
-            up.className = 'item folder'; 
-            up.innerText = `.. (BACK)`;
-            up.onclick = () => { currentPath.pop(); renderList(); }; 
-            trackList.appendChild(up);
+            const up = document.createElement('li'); up.className = 'item folder'; up.innerText = `.. (BACK)`;
+            up.onclick = () => { currentPath.pop(); renderList(); }; trackList.appendChild(up);
         }
-
-        const dirs = new Set();
-        const filesInLevel = [];
-
+        const dirs = new Set(); const files = [];
         allFiles.forEach(f => {
-            // 現在の階層パスと一致するかチェック
             const isMatch = currentPath.every((p, i) => f.path[i] === p);
             if (isMatch) {
-                const nextPart = f.path[currentPath.length];
-                if (f.path.length === currentPath.length + 1) {
-                    filesInLevel.push(f); // ファイル
-                } else if (nextPart) {
-                    dirs.add(nextPart); // フォルダ
-                }
+                const next = f.path[currentPath.length];
+                if (f.path.length === currentPath.length + 1) files.push(f); else if (next) dirs.add(next);
             }
         });
-
-        // フォルダを表示
-        Array.from(dirs).sort().forEach(d => {
-            const li = document.createElement('li'); 
-            li.className = 'item folder'; 
-            li.innerText = `📁 ${d.toUpperCase()}`;
-            li.onclick = () => { currentPath.push(d); renderList(); }; 
-            trackList.appendChild(li);
+        dirs.forEach(d => {
+            const li = document.createElement('li'); li.className = 'item folder'; li.innerText = d.toUpperCase();
+            li.onclick = () => { currentPath.push(d); renderList(); }; trackList.appendChild(li);
         });
-
-        // ファイルを表示
-        filesInLevel.forEach(f => {
-            const li = document.createElement('li'); 
-            li.className = 'item track';
+        files.forEach(f => {
+            const li = document.createElement('li'); li.className = 'item track';
             const uniqueId = `info-${f.file.lastModified}-${f.file.size}`;
-            li.innerHTML = `
-                <div class="item-upper">
-                    <span class="track-name-part">${f.name}</span>
-                    <span class="track-duration-part" id="dur-${uniqueId}">--:--</span>
-                </div>
-                <div class="item-lower" id="meta-${uniqueId}">UNKNOWN ARTIST</div>`;
-            
+            li.innerHTML = `<div class="item-upper"><span class="track-name-part">${f.name}</span><span class="track-duration-part" id="dur-${uniqueId}">--:--</span></div><div class="item-lower" id="meta-${uniqueId}">UNKNOWN ARTIST</div>`;
             li.onclick = () => { loadTrack(f.file); overlay.style.display = 'none'; };
             trackList.appendChild(li);
-
-            // メタデータ（長さ・アーティスト）の取得
-            const url = URL.createObjectURL(f.file);
-            const tempAudio = new Audio(url);
-            tempAudio.onloadedmetadata = () => { 
-                const el = document.getElementById(`dur-${uniqueId}`); 
-                if (el) el.innerText = formatTime(tempAudio.duration); 
-                URL.revokeObjectURL(url); 
-            };
-            if (window.jsmediatags) { 
-                window.jsmediatags.read(f.file, { 
-                    onSuccess: (tag) => { 
-                        const artist = (tag.tags.artist || "UNKNOWN ARTIST").toUpperCase(); 
-                        const metaEl = document.getElementById(`meta-${uniqueId}`); 
-                        if (metaEl) metaEl.innerText = artist; 
-                    } 
-                }); 
-            }
+            const url = URL.createObjectURL(f.file); const tempAudio = new Audio(url);
+            tempAudio.onloadedmetadata = () => { const el = document.getElementById(`dur-${uniqueId}`); if (el) el.innerText = formatTime(tempAudio.duration); URL.revokeObjectURL(url); };
+            if (window.jsmediatags) { window.jsmediatags.read(f.file, { onSuccess: (tag) => { const artist = (tag.tags.artist || "UNKNOWN ARTIST").toUpperCase(); const metaEl = document.getElementById(`meta-${uniqueId}`); if (metaEl) metaEl.innerText = artist; } }); }
         });
     }
 
     function loadTrack(file) {
-        loadingOverlay.style.display = 'flex'; 
-        loadingSpinner.style.display = 'block'; 
-        tapToStart.style.display = 'none';
-        audio.pause(); 
-        playIcon.innerHTML = ICON_PLAY;
-        
-        const fileUrl = URL.createObjectURL(file); 
-        audio.src = fileUrl; 
-        posA = 0; posB = 100; 
-        audio.currentTime = 0; 
-        seek.value = 0;
-        
+        loadingOverlay.style.display = 'flex'; loadingSpinner.style.display = 'block'; tapToStart.style.display = 'none';
+        audio.pause(); playIcon.innerHTML = ICON_PLAY;
+        const fileUrl = URL.createObjectURL(file); audio.src = fileUrl; posA = 0; posB = 100; audio.currentTime = 0; seek.value = 0;
         audio.onloadeddata = () => {
-            loadingSpinner.style.display = 'none'; 
-            tapToStart.style.display = 'block';
+            loadingSpinner.style.display = 'none'; tapToStart.style.display = 'block';
             window.jsmediatags.read(file, {
                 onSuccess: (tag) => {
-                    document.getElementById('title-text').innerText = (tag.tags.title || file.name).toUpperCase();
-                    document.getElementById('artist-text').innerText = (tag.tags.artist || "UNKNOWN ARTIST").toUpperCase();
+                    document.getElementById('title-text').innerText = tag.tags.title || file.name;
+                    document.getElementById('artist-text').innerText = tag.tags.artist || "UNKNOWN ARTIST";
                     setTimeout(() => { checkMarquee('title-inner', 'title-box'); checkMarquee('artist-inner', 'artist-box'); }, 100);
                 },
                 onError: () => {
-                    document.getElementById('title-text').innerText = file.name.toUpperCase();
+                    document.getElementById('title-text').innerText = file.name;
                     document.getElementById('artist-text').innerText = "UNKNOWN ARTIST";
                     setTimeout(() => { checkMarquee('title-inner', 'title-box'); checkMarquee('artist-inner', 'artist-box'); }, 100);
                 }
@@ -481,7 +424,7 @@
         updateTempo(100);
     }
 
-    // --- PLAYER FUNCTIONS (そのまま維持) ---
+    // --- PLAYER FUNCTIONS (from index3.html original) ---
     function startSequence() { loadingOverlay.style.display = 'none'; audio.play(); playIcon.innerHTML = ICON_PAUSE; }
     tapToStart.onclick = (e) => { e.stopPropagation(); startSequence(); };
 
