@@ -2,7 +2,7 @@
   "name": "ZEFRAM PLAYER NEO",
   "short_name": "ZPN",
   "description": "Minimalist Dance Music Player",
-  "start_url": "index3.html",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#080808",
   "theme_color": "#080808",
@@ -15,4 +15,5 @@
       "purpose": "any maskable"
     }
   ]
+
 }
